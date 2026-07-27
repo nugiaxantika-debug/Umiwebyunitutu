@@ -3671,32 +3671,54 @@ Link referensi: ${randomItem.link}` }, { quoted: msg });
           await this.sock.sendMessage(jid, { text: `Kirim teks dengan format atas|bawah!\nContoh: .smeme Halo|Semua` }, { quoted: msg });
        } else {
           try {
+             await this.sock.sendMessage(jid, { text: "⏳ *Sedang membuat smeme...*" }, { quoted: msg });
              const [atas, bawah] = text.split("|");
              
              const isMedia = msg.message?.imageMessage;
              const isQuotedMedia = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
-             let bgBuffer: Buffer | null = null;
+             let bgBuffer = null;
              
              if (isMedia || isQuotedMedia) {
-                const mediaMessage = isQuotedMedia || isMedia;
-                // @ts-ignore
-                const stream = await downloadContentFromMessage(mediaMessage, 'image');
-                let buffer = Buffer.from([]);
-                for await(const chunk of stream) {
-                    buffer = Buffer.concat([buffer, chunk]);
-                }
-                bgBuffer = await sharp(buffer).resize(512, 512, { fit: 'cover' }).toBuffer();
+                const mediaMessage = isQuotedMedia ? { message: { imageMessage: isQuotedMedia } } : msg;
+                const stream = await downloadMediaMessage(
+                    mediaMessage as any,
+                    'buffer',
+                    {},
+                    { logger: pino({ level: 'silent' }) as any, reuploadRequest: this.sock.updateMediaMessage }
+                ) as Buffer;
+                bgBuffer = await sharp(stream).resize(512, 512, { fit: 'cover' }).jpeg().toBuffer();
              } else {
-                bgBuffer = await sharp({ create: { width: 512, height: 512, channels: 4, background: { r: 50, g: 50, b: 50, alpha: 1 } } }).png().toBuffer();
+                bgBuffer = await sharp({ create: { width: 512, height: 512, channels: 4, background: { r: 50, g: 50, b: 50, alpha: 1 } } }).jpeg().toBuffer();
              }
              
-             const svgMeme = `<svg width="512" height="512">
-               <text x="256" y="50" font-size="48" font-family="Impact, Arial, sans-serif" font-weight="bold" fill="white" stroke="black" stroke-width="2" text-anchor="middle" dominant-baseline="hanging">${atas.trim()}</text>
-               <text x="256" y="462" font-size="48" font-family="Impact, Arial, sans-serif" font-weight="bold" fill="white" stroke="black" stroke-width="2" text-anchor="middle" dominant-baseline="baseline">${bawah.trim()}</text>
-             </svg>`;
+             const { createCanvas, loadImage } = require('@napi-rs/canvas');
+             const image = await loadImage(bgBuffer);
+             const canvas = createCanvas(512, 512);
+             const ctx = canvas.getContext('2d');
              
-             const finalBuffer = await sharp(bgBuffer).composite([{ input: Buffer.from(svgMeme), blend: 'over' }]).webp().toBuffer();
-             await this.sock.sendMessage(jid, { sticker: finalBuffer }, { quoted: msg });
+             ctx.drawImage(image, 0, 0, 512, 512);
+             
+             ctx.font = 'bold 60px Arial';
+             ctx.textAlign = 'center';
+             ctx.fillStyle = 'white';
+             ctx.strokeStyle = 'black';
+             ctx.lineWidth = 6;
+             
+             if (atas.trim()) {
+                 ctx.textBaseline = 'top';
+                 ctx.strokeText(atas.trim(), 256, 15);
+                 ctx.fillText(atas.trim(), 256, 15);
+             }
+             
+             if (bawah.trim()) {
+                 ctx.textBaseline = 'bottom';
+                 ctx.strokeText(bawah.trim(), 256, 497);
+                 ctx.fillText(bawah.trim(), 256, 497);
+             }
+             
+             const finalBuffer = canvas.toBuffer('image/png');
+             const stickerBuffer = await sharp(finalBuffer).webp({ quality: 80 }).toBuffer();
+             await this.sock.sendMessage(jid, { sticker: stickerBuffer }, { quoted: msg });
           } catch (e) {
              console.error("Smeme error: ", e);
              await this.sock.sendMessage(jid, { text: `❌ Gagal membuat stiker meme.` }, { quoted: msg });
@@ -3964,20 +3986,29 @@ Link referensi: ${randomItem.link}` }, { quoted: msg });
            await this.sock.sendMessage(jid, { text: `Kirim dua emoji untuk digabung!\nContoh: .emojimix 😭 🤡` }, { quoted: msg });
        }
     } else if (body.startsWith(".emojigif") || body.startsWith("emojigif")) {
-       // Since true emoji-to-gif needs tenor API, we'll simulate by making a wobbling sticker
        const text = messageContent.replace(/^\.?emojigif\s*/i, "").trim();
        const chars = Array.from(text.replace(/[\s+]/g, '')) as string[];
        const emojis = chars.filter(c => (c.codePointAt(0) || 0) > 255);
        if (emojis.length >= 1) {
            try {
-               await this.sock.sendMessage(jid, { text: "⏳ *Membuat emoji GIF...*" }, { quoted: msg });
-               const code = emojis[0].codePointAt(0)?.toString(16);
-               // We'll try to get the Apple/Google emoji image and send it as animated
-               // Just getting standard emoji kitchen single doesn't work, so we fallback
-               const svg = `<svg width="512" height="512" xmlns="http://www.w3.org/2000/svg"><text x="50%" y="50%" font-size="256" text-anchor="middle" alignment-baseline="middle">${emojis[0]}</text></svg>`;
-               const frame1 = await sharp(Buffer.from(svg)).webp().toBuffer();
-               // Note: creating actual animated webp/gif needs multiple frames which is hard here. We just send static sticker for now.
-               await this.sock.sendMessage(jid, { sticker: frame1 }, { quoted: msg });
+               await this.sock.sendMessage(jid, { text: "⏳ *Membuat emoji...*" }, { quoted: msg });
+               const { createCanvas } = require('@napi-rs/canvas');
+               const canvas = createCanvas(512, 512);
+               const ctx = canvas.getContext('2d');
+               
+               ctx.fillStyle = 'transparent';
+               ctx.fillRect(0, 0, 512, 512);
+               
+               ctx.font = '256px Arial';
+               ctx.textAlign = 'center';
+               ctx.textBaseline = 'middle';
+               
+               ctx.fillText(emojis[0], 256, 256);
+               
+               const frame1 = canvas.toBuffer('image/png');
+               const stickerBuffer = await sharp(frame1).webp({ quality: 80 }).toBuffer();
+               
+               await this.sock.sendMessage(jid, { sticker: stickerBuffer }, { quoted: msg });
            } catch (e) {
                await this.sock.sendMessage(jid, { text: `❌ Gagal membuat emojigif.` }, { quoted: msg });
            }
@@ -3987,35 +4018,70 @@ Link referensi: ${randomItem.link}` }, { quoted: msg });
     } else if (body.startsWith(".bratgambar") || body.startsWith("bratgambar")) {
        const text = messageContent.replace(/^\.?bratgambar\s*/i, "").trim() || "Brat";
        const isQuotedImage = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
-       if (isQuotedImage) {
+       const isImage = msg.message?.imageMessage;
+       if (isQuotedImage || isImage) {
            try {
                await this.sock.sendMessage(jid, { text: "⏳ *Membuat stiker brat gambar...*" }, { quoted: msg });
+               const mediaMessage = isQuotedImage ? { message: { imageMessage: isQuotedImage } } : msg;
                const imgBuffer = await downloadMediaMessage(
-                   { message: { imageMessage: isQuotedImage } } as any,
+                   mediaMessage as any,
                    'buffer',
                    {},
                    { logger: pino({ level: 'silent' }) as any, reuploadRequest: this.sock.updateMediaMessage }
                ) as Buffer;
                
-               const safeText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-               const svgText = `<svg width="512" height="512" xmlns="http://www.w3.org/2000/svg">
-                 <rect width="100%" height="100%" fill="rgba(138, 226, 52, 0.5)"/>
-                 <text x="50%" y="50%" font-size="60" font-family="Arial" font-weight="bold" fill="white" text-anchor="middle" alignment-baseline="middle" stroke="black" stroke-width="2">${safeText}</text>
-               </svg>`;
+               const baseImageBuffer = await sharp(imgBuffer).resize(512, 512, { fit: 'cover' }).jpeg().toBuffer();
                
-               const finalBuffer = await sharp(imgBuffer)
-                   .resize(512, 512, { fit: 'cover' })
-                   .composite([{ input: Buffer.from(svgText), gravity: 'center' }])
-                   .webp()
-                   .toBuffer();
-                   
-               await this.sock.sendMessage(jid, { sticker: finalBuffer }, { quoted: msg });
+               const { createCanvas, loadImage } = require('@napi-rs/canvas');
+               const image = await loadImage(baseImageBuffer);
+               const canvas = createCanvas(512, 512);
+               const ctx = canvas.getContext('2d');
+               
+               ctx.drawImage(image, 0, 0, 512, 512);
+               
+               // semi transparent white overlay
+               ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+               ctx.fillRect(0, 0, 512, 512);
+               
+               ctx.fillStyle = 'black';
+               ctx.font = 'bold 80px Arial';
+               ctx.textAlign = 'center';
+               ctx.textBaseline = 'middle';
+               
+               const words = text.split(' ');
+               let lines = [];
+               let currentLine = '';
+               
+               for (let word of words) {
+                   let testLine = currentLine + word + ' ';
+                   if (ctx.measureText(testLine).width > 480 && currentLine.length > 0) {
+                       lines.push(currentLine);
+                       currentLine = word + ' ';
+                   } else {
+                       currentLine = testLine;
+                   }
+               }
+               lines.push(currentLine);
+               
+               const lineHeight = 90;
+               const totalHeight = lines.length * lineHeight;
+               let startY = (512 - totalHeight) / 2 + (lineHeight / 2);
+               
+               for (let line of lines) {
+                   ctx.fillText(line.trim(), 256, startY);
+                   startY += lineHeight;
+               }
+               
+               const finalBuffer = canvas.toBuffer('image/png');
+               const stickerBuffer = await sharp(finalBuffer).webp({ quality: 80 }).toBuffer();
+                                  
+               await this.sock.sendMessage(jid, { sticker: stickerBuffer }, { quoted: msg });
            } catch (e) {
                console.error("Bratgambar error:", e);
                await this.sock.sendMessage(jid, { text: `❌ Gagal membuat stiker brat gambar.` }, { quoted: msg });
            }
        } else {
-           await this.sock.sendMessage(jid, { text: `Reply gambar dengan perintah .bratgambar <teks>` }, { quoted: msg });
+           await this.sock.sendMessage(jid, { text: `Reply/kirim gambar dengan perintah .bratgambar <teks>` }, { quoted: msg });
        }
     } else if (body.startsWith(".stikerrandom") || body.startsWith("stikerrandom")) {
        try {
@@ -5009,24 +5075,60 @@ Link referensi: ${randomItem.link}` }, { quoted: msg });
           try {
              await this.sock.sendMessage(jid, { text: `⏳ *Sedang membuat stiker ATTP...*` }, { quoted: msg });
              const url = `https://api.vreden.my.id/api/maker/attp?text=${encodeURIComponent(text)}`;
+             let stickerData = null;
              try {
-                // If the API works, it will return a webp buffer
-                const res = await axios.get(url, { responseType: 'arraybuffer' });
-                await this.sock.sendMessage(jid, { sticker: Buffer.from(res.data) }, { quoted: msg });
+                const res = await axios.get(url, { responseType: 'arraybuffer', timeout: 5000 });
+                stickerData = Buffer.from(res.data);
              } catch (err) {
-                 // Fallback to text SVG
-                 const safeText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                 const svgMeme = `<svg width="512" height="512" xmlns="http://www.w3.org/2000/svg">
-                   <rect width="512" height="512" fill="transparent"/>
-                   <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Arial, sans-serif" font-size="60" font-weight="bold" fill="#ff0055">${safeText}</text>
-                 </svg>`;
-                 const bgBuffer = Buffer.from(svgMeme);
-
-                 const pngBuffer = await sharp(bgBuffer).png().toBuffer();
+                 // Fallback to canvas rendering
+                 const { createCanvas } = require('@napi-rs/canvas');
+                 const canvas = createCanvas(512, 512);
+                 const ctx = canvas.getContext('2d');
+                 
+                 ctx.fillStyle = 'transparent';
+                 ctx.fillRect(0, 0, 512, 512);
+                 
+                 const colors = ['#ff0000', '#ff7f00', '#ffff00', '#00ff00', '#0000ff', '#4b0082', '#8b00ff'];
+                 const randomColor = colors[Math.floor(Math.random() * colors.length)];
+                 
+                 ctx.fillStyle = randomColor;
+                 ctx.strokeStyle = 'white';
+                 ctx.lineWidth = 8;
+                 ctx.font = 'bold 80px Arial';
+                 ctx.textAlign = 'center';
+                 ctx.textBaseline = 'middle';
+                 
+                 // basic word wrap
+                 const words = text.split(' ');
+                 let lines = [];
+                 let currentLine = '';
+                 
+                 for (let word of words) {
+                     let testLine = currentLine + word + ' ';
+                     if (ctx.measureText(testLine).width > 480 && currentLine.length > 0) {
+                         lines.push(currentLine);
+                         currentLine = word + ' ';
+                     } else {
+                         currentLine = testLine;
+                     }
+                 }
+                 lines.push(currentLine);
+                 
+                 const lineHeight = 90;
+                 const totalHeight = lines.length * lineHeight;
+                 let startY = (512 - totalHeight) / 2 + (lineHeight / 2);
+                 
+                 for (let line of lines) {
+                     ctx.strokeText(line.trim(), 256, startY);
+                     ctx.fillText(line.trim(), 256, startY);
+                     startY += lineHeight;
+                 }
+                 
+                 const pngBuffer = canvas.toBuffer('image/png');
                  const sticker = new Sticker(pngBuffer, { pack: 'ATTP', author: 'Bot', type: 'full' });
-                 const finalBuffer = await sticker.toBuffer();
-                 await this.sock.sendMessage(jid, { sticker: finalBuffer }, { quoted: msg });
+                 stickerData = await sticker.toBuffer();
              }
+             await this.sock.sendMessage(jid, { sticker: stickerData }, { quoted: msg });
           } catch (e) {
              console.error("ATTP error: ", e);
              await this.sock.sendMessage(jid, { text: `❌ Gagal membuat ATTP.` }, { quoted: msg });
@@ -5039,19 +5141,54 @@ Link referensi: ${randomItem.link}` }, { quoted: msg });
        } else {
           try {
              await this.sock.sendMessage(jid, { text: `⏳ *Sedang membuat logo...*` }, { quoted: msg });
-             const safeText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-             const svgLogo = `<svg width="800" height="800" xmlns="http://www.w3.org/2000/svg">
-               <defs>
-                 <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-                   <stop offset="0%" style="stop-color:rgb(131,58,180);stop-opacity:1" />
-                   <stop offset="50%" style="stop-color:rgb(253,29,29);stop-opacity:1" />
-                   <stop offset="100%" style="stop-color:rgb(252,176,69);stop-opacity:1" />
-                 </linearGradient>
-               </defs>
-               <rect width="100%" height="100%" fill="url(#grad1)"/>
-               <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Verdana, sans-serif" font-size="80" font-weight="bold" fill="white" stroke="black" stroke-width="2">${safeText}</text>
-             </svg>`;
-             const finalBuffer = await sharp(Buffer.from(svgLogo)).png().toBuffer();
+             
+             const { createCanvas } = require('@napi-rs/canvas');
+             const canvas = createCanvas(800, 800);
+             const ctx = canvas.getContext('2d');
+             
+             // Create linear gradient
+             const grad = ctx.createLinearGradient(0, 0, 800, 800);
+             grad.addColorStop(0, "rgb(131,58,180)");
+             grad.addColorStop(0.5, "rgb(253,29,29)");
+             grad.addColorStop(1, "rgb(252,176,69)");
+             
+             ctx.fillStyle = grad;
+             ctx.fillRect(0, 0, 800, 800);
+             
+             ctx.fillStyle = 'white';
+             ctx.strokeStyle = 'black';
+             ctx.lineWidth = 10;
+             ctx.font = 'bold 100px Arial';
+             ctx.textAlign = 'center';
+             ctx.textBaseline = 'middle';
+             
+             // basic word wrap
+             const words = text.split(' ');
+             let lines = [];
+             let currentLine = '';
+             
+             for (let word of words) {
+                 let testLine = currentLine + word + ' ';
+                 if (ctx.measureText(testLine).width > 750 && currentLine.length > 0) {
+                     lines.push(currentLine);
+                     currentLine = word + ' ';
+                 } else {
+                     currentLine = testLine;
+                 }
+             }
+             lines.push(currentLine);
+             
+             const lineHeight = 110;
+             const totalHeight = lines.length * lineHeight;
+             let startY = (800 - totalHeight) / 2 + (lineHeight / 2);
+             
+             for (let line of lines) {
+                 ctx.strokeText(line.trim(), 400, startY);
+                 ctx.fillText(line.trim(), 400, startY);
+                 startY += lineHeight;
+             }
+             
+             const finalBuffer = canvas.toBuffer('image/jpeg');
              await this.sock.sendMessage(jid, { image: finalBuffer, caption: `🎨 *Logo berhasil dibuat!*` }, { quoted: msg });
           } catch (e) {
              console.error("Logo error: ", e);
