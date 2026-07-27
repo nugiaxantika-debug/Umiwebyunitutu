@@ -3691,7 +3691,7 @@ Link referensi: ${randomItem.link}` }, { quoted: msg });
                 bgBuffer = await sharp({ create: { width: 512, height: 512, channels: 4, background: { r: 50, g: 50, b: 50, alpha: 1 } } }).jpeg().toBuffer();
              }
              
-             const { createCanvas, loadImage } = require('@napi-rs/canvas');
+             const { createCanvas, loadImage } = (await import('@napi-rs/canvas'));
              const image = await loadImage(bgBuffer);
              const canvas = createCanvas(512, 512);
              const ctx = canvas.getContext('2d');
@@ -3879,7 +3879,7 @@ Link referensi: ${randomItem.link}` }, { quoted: msg });
                // Try to add Exif
                let finalStickerBuffer = stickerBuffer;
                try {
-                   const webpmux = require('node-webpmux');
+                   const webpmux = (await import('node-webpmux')).default;
                    const img = new webpmux.Image();
                    await img.load(stickerBuffer);
                    const exif = Buffer.from(JSON.stringify({
@@ -3992,7 +3992,7 @@ Link referensi: ${randomItem.link}` }, { quoted: msg });
        if (emojis.length >= 1) {
            try {
                await this.sock.sendMessage(jid, { text: "⏳ *Membuat emoji...*" }, { quoted: msg });
-               const { createCanvas } = require('@napi-rs/canvas');
+               const { createCanvas } = (await import('@napi-rs/canvas'));
                const canvas = createCanvas(512, 512);
                const ctx = canvas.getContext('2d');
                
@@ -4032,7 +4032,7 @@ Link referensi: ${randomItem.link}` }, { quoted: msg });
                
                const baseImageBuffer = await sharp(imgBuffer).resize(512, 512, { fit: 'cover' }).jpeg().toBuffer();
                
-               const { createCanvas, loadImage } = require('@napi-rs/canvas');
+               const { createCanvas, loadImage } = (await import('@napi-rs/canvas'));
                const image = await loadImage(baseImageBuffer);
                const canvas = createCanvas(512, 512);
                const ctx = canvas.getContext('2d');
@@ -4495,7 +4495,7 @@ Link referensi: ${randomItem.link}` }, { quoted: msg });
                    const stickerBuffer = fs.readFileSync(tempOutput);
                    let finalStickerBuffer = stickerBuffer;
                    try {
-                       const webpmux = require('node-webpmux');
+                       const webpmux = (await import('node-webpmux')).default;
                        const img = new webpmux.Image();
                        await img.load(stickerBuffer);
                        const exif = Buffer.from(JSON.stringify({ "sticker-pack-id": "1", "sticker-pack-name": "Stiker Video", "sticker-pack-publisher": "Bot", "emojis": ["🤖"] }), 'utf8');
@@ -4669,7 +4669,7 @@ Link referensi: ${randomItem.link}` }, { quoted: msg });
        } else {
          await this.sock.sendMessage(jid, { text: `⏳ *Sedang menulis...*` }, { quoted: msg });
          try {
-           const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
+           const { createCanvas, loadImage, GlobalFonts } = (await import('@napi-rs/canvas'));
            const nulisDir = path.join(process.cwd(), 'node_modules', 'nulis-buku');
            const bgPath = path.join(nulisDir, 'assets', 'buku1.jpg');
            const fontPath = path.join(nulisDir, 'font', 'Indie-Flower.ttf');
@@ -5081,7 +5081,7 @@ Link referensi: ${randomItem.link}` }, { quoted: msg });
                 stickerData = Buffer.from(res.data);
              } catch (err) {
                  // Fallback to canvas rendering
-                 const { createCanvas } = require('@napi-rs/canvas');
+                 const { createCanvas } = (await import('@napi-rs/canvas'));
                  const canvas = createCanvas(512, 512);
                  const ctx = canvas.getContext('2d');
                  
@@ -5142,7 +5142,7 @@ Link referensi: ${randomItem.link}` }, { quoted: msg });
           try {
              await this.sock.sendMessage(jid, { text: `⏳ *Sedang membuat logo...*` }, { quoted: msg });
              
-             const { createCanvas } = require('@napi-rs/canvas');
+             const { createCanvas } = (await import('@napi-rs/canvas'));
              const canvas = createCanvas(800, 800);
              const ctx = canvas.getContext('2d');
              
