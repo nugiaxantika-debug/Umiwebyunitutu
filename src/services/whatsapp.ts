@@ -4633,7 +4633,7 @@ Link referensi: ${randomItem.link}` }, { quoted: msg });
            ctx.fillText('-', 360, 120);
            
            ctx.font = '20px "Indie Flower"';
-           const panjangKalimat5 = teks.replace(/(\S+\s*){1,10}/g, '$$&\n');
+           const panjangKalimat5 = teks.replace(/(\S+\s*){1,10}/g, '$&\n');
            const lines = panjangKalimat5.split('\n').slice(0, 33);
            
            let startY = 142;
