@@ -41,7 +41,7 @@ const replacement = `} else if (body.startsWith(".nulis ") || body === ".nulis" 
            ctx.fillText('-', 360, 120);
            
            ctx.font = '20px "Indie Flower"';
-           const panjangKalimat5 = teks.replace(/(\\S+\\s*){1,10}/g, '$&\\n');
+           const panjangKalimat5 = teks.replace(/(\\S+\\s*){1,10}/g, '$$&\\n');
            const lines = panjangKalimat5.split('\\n').slice(0, 33);
            
            let startY = 142;
@@ -60,9 +60,9 @@ const replacement = `} else if (body.startsWith(".nulis ") || body === ".nulis" 
     `;
 
 if (code.match(regex)) {
-    code = code.replace(regex, replacement);
+    code = code.replace(regex, () => replacement);
     fs.writeFileSync('src/services/whatsapp.ts', code);
-    console.log("Patched nulis");
+    console.log("Patched nulis fix");
 } else {
     console.log("Regex not found");
 }

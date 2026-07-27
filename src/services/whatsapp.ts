@@ -4603,59 +4603,48 @@ Link referensi: ${randomItem.link}` }, { quoted: msg });
        } else {
          await this.sock.sendMessage(jid, { text: `⏳ *Sedang menulis...*` }, { quoted: msg });
          try {
-           // Path to nulis-buku assets
+           const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
            const nulisDir = path.join(process.cwd(), 'node_modules', 'nulis-buku');
            const bgPath = path.join(nulisDir, 'assets', 'buku1.jpg');
            const fontPath = path.join(nulisDir, 'font', 'Indie-Flower.ttf');
-           const tempFile = path.join(os.tmpdir(), `nulis_${Date.now()}.jpg`);
-
-           const panjangKalimat5 = teks.replace(/(\S+\s*){1,10}/g, '$&\n');
-           const panjangBaris5 = panjangKalimat5.split('\n').slice(0, 33).join('\n');
-
+           
+           GlobalFonts.registerFromPath(fontPath, 'Indie Flower');
+           
+           const image = await loadImage(bgPath);
+           const canvas = createCanvas(image.width, image.height);
+           const ctx = canvas.getContext('2d');
+           
+           ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+           
+           ctx.fillStyle = '#1b1b1b';
+           ctx.textBaseline = 'alphabetic';
+           
            const now = new Date();
            const hari = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"][now.getDay()];
            const tanggal = `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear()}`;
-           execFileSync("convert", [
-               bgPath,
-               '-font', fontPath,
-               '-fill', '#1b1b1b',
-               '-size', '1024x784',
-               '-pointsize', '20',
-               '-interline-spacing', '1',
-               '-annotate', '+806+78', hari,
-               '-font', fontPath,
-               '-fill', '#1b1b1b',
-               '-size', '1024x784',
-               '-pointsize', '18',
-               '-interline-spacing', '1',
-               '-annotate', '+806+102', tanggal,
-               '-font', fontPath,
-               '-fill', '#1b1b1b',
-               '-size', '1024x784',
-               '-pointsize', '18',
-               '-interline-spacing', '1',
-               '-annotate', '+360+100', msg.pushName || 'User',
-               '-font', fontPath,
-               '-fill', '#1b1b1b',
-               '-size', '1024x784',
-               '-pointsize', '18',
-               '-interline-spacing', '1',
-               '-annotate', '+360+120', '-',
-               '-font', fontPath,
-               '-fill', '#1b1b1b',
-               '-size', '1024x784',
-               '-pointsize', '20',
-               '-interline-spacing', '-7.5',
-               '-annotate', '+344+142', panjangBaris5,
-               tempFile
-           ]);
-
-           if (fs.existsSync(tempFile)) {
-             await this.sock.sendMessage(jid, { image: { url: tempFile }, caption: `📝 *Nulis Selesai*` }, { quoted: msg });
-             fs.unlinkSync(tempFile);
-           } else {
-             await this.sock.sendMessage(jid, { text: `❌ *Gagal menulis (file tidak ditemukan)*` }, { quoted: msg });
+           
+           ctx.font = '20px "Indie Flower"';
+           ctx.fillText(hari, 806, 78);
+           
+           ctx.font = '18px "Indie Flower"';
+           ctx.fillText(tanggal, 806, 102);
+           
+           ctx.fillText(msg.pushName || 'User', 360, 100);
+           ctx.fillText('-', 360, 120);
+           
+           ctx.font = '20px "Indie Flower"';
+           const panjangKalimat5 = teks.replace(/(\S+\s*){1,10}/g, '$$&\n');
+           const lines = panjangKalimat5.split('\n').slice(0, 33);
+           
+           let startY = 142;
+           const lineHeight = 19; 
+           
+           for (let i = 0; i < lines.length; i++) {
+               ctx.fillText(lines[i], 344, startY + (i * lineHeight));
            }
+           
+           const buffer = canvas.toBuffer('image/jpeg');
+           await this.sock.sendMessage(jid, { image: buffer, caption: `📝 *Nulis Selesai*` }, { quoted: msg });
          } catch (e: any) {
            await this.sock.sendMessage(jid, { text: `❌ *Gagal menulis:* ${e.message}` }, { quoted: msg });
          }
